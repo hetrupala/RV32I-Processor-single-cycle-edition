@@ -10,12 +10,12 @@
 // Target Devices: 
 // Tool Versions: 
 // Description: RV32I Instruction Decoder
-// 
+//
 // Dependencies: 
 // Revision:
 // Revision 0.01 - File Created
 // Additional Comments:
-// 
+//
 //////////////////////////////////////////////////////////////////////////////////
 
 
@@ -28,11 +28,13 @@ module DECODER(
     output reg [2:0] branch_op_out,
     output reg alu_src_a_out,
     output reg mem_write_out,
+    output reg mem_read_out,
     output reg alu_src_b_out,
     output reg reg_write_out,
     output reg [5:0] alu_op_out,
-
     output reg [2:0] imm_type_out,
+    output reg [1:0] mem_size_out,
+    output reg sign_ext_out,
 
     output reg [4:0] rs1_addr_out,
     output reg [4:0] rs2_addr_out,
@@ -52,11 +54,24 @@ module DECODER(
         branch_op_out  = 3'b000;
         alu_src_a_out  = 1'b0;
         mem_write_out  = 1'b0;
+        mem_read_out   = 1'b0;
         alu_src_b_out  = 1'b0;
         reg_write_out  = 1'b0;
         alu_op_out     = 6'b0;
 
-        // Immediate type selection
+        // Memory control
+        // 00 -> Byte
+        // 01 -> Halfword
+        // 10 -> Word
+        mem_size_out = 2'b10;
+
+        // 1 -> Signed
+        // 0 -> Unsigned
+        sign_ext_out = 1'b1;
+
+
+        // ============================================================
+        // IMMEDIATE TYPE
         //
         // 000 -> I-Type
         // 001 -> S-Type
@@ -64,10 +79,15 @@ module DECODER(
         // 011 -> U-Type
         // 100 -> J-Type
         // 101 -> R-Type
-        //
+        // ============================================================
+
         imm_type_out = 3'b101;
 
-        // Register addresses
+
+        // ============================================================
+        // REGISTER ADDRESSES
+        // ============================================================
+
         rs1_addr_out = instruction_in[19:15];
         rs2_addr_out = instruction_in[24:20];
         rd_addr_out  = instruction_in[11:7];
@@ -77,7 +97,7 @@ module DECODER(
         // OPCODE-FIRST DECODING
         // ============================================================
 
-        case (instruction_in[6:0])
+        case(instruction_in[6:0])
 
 
             // ========================================================
@@ -87,16 +107,17 @@ module DECODER(
 
             7'b0110011: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b101;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b101;
+                result_mux_out = 2'b00;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
                         // ADD / SUB
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             // ADD
                             alu_op_out    = 6'b000000;
@@ -104,7 +125,7 @@ module DECODER(
 
                         end
 
-                        else if (instruction_in[31:25] == 7'b0100000) begin
+                        else if(instruction_in[31:25] == 7'b0100000) begin
 
                             // SUB
                             alu_op_out    = 6'b000001;
@@ -119,7 +140,7 @@ module DECODER(
 
                         // SLL
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000111;
                             reg_write_out = 1'b1;
@@ -133,7 +154,7 @@ module DECODER(
 
                         // SLT
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000101;
                             reg_write_out = 1'b1;
@@ -147,7 +168,7 @@ module DECODER(
 
                         // SLTU
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000110;
                             reg_write_out = 1'b1;
@@ -161,7 +182,7 @@ module DECODER(
 
                         // XOR
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000100;
                             reg_write_out = 1'b1;
@@ -175,7 +196,7 @@ module DECODER(
 
                         // SRL / SRA
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             // SRL
                             alu_op_out    = 6'b001000;
@@ -183,7 +204,7 @@ module DECODER(
 
                         end
 
-                        else if (instruction_in[31:25] == 7'b0100000) begin
+                        else if(instruction_in[31:25] == 7'b0100000) begin
 
                             // SRA
                             alu_op_out    = 6'b001001;
@@ -198,7 +219,7 @@ module DECODER(
 
                         // OR
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000011;
                             reg_write_out = 1'b1;
@@ -212,7 +233,7 @@ module DECODER(
 
                         // AND
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             alu_op_out    = 6'b000010;
                             reg_write_out = 1'b1;
@@ -233,17 +254,18 @@ module DECODER(
 
             7'b0010011: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b000;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b000;
+                result_mux_out = 2'b00;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
                         // ADDI
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000000;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -252,11 +274,11 @@ module DECODER(
 
                         // SLLI
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
-                            alu_op_out     = 6'b000111;
-                            alu_src_b_out  = 1'b1;
-                            reg_write_out  = 1'b1;
+                            alu_op_out    = 6'b000111;
+                            alu_src_b_out = 1'b1;
+                            reg_write_out = 1'b1;
 
                         end
 
@@ -266,9 +288,9 @@ module DECODER(
                     3'b010: begin
 
                         // SLTI
-                        alu_op_out     = 6'b000101;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000101;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -276,9 +298,9 @@ module DECODER(
                     3'b011: begin
 
                         // SLTIU
-                        alu_op_out     = 6'b000110;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000110;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -286,9 +308,9 @@ module DECODER(
                     3'b100: begin
 
                         // XORI
-                        alu_op_out     = 6'b000100;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000100;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -297,21 +319,21 @@ module DECODER(
 
                         // SRLI / SRAI
 
-                        if (instruction_in[31:25] == 7'b0000000) begin
+                        if(instruction_in[31:25] == 7'b0000000) begin
 
                             // SRLI
-                            alu_op_out     = 6'b001000;
-                            alu_src_b_out  = 1'b1;
-                            reg_write_out  = 1'b1;
+                            alu_op_out    = 6'b001000;
+                            alu_src_b_out = 1'b1;
+                            reg_write_out = 1'b1;
 
                         end
 
-                        else if (instruction_in[31:25] == 7'b0100000) begin
+                        else if(instruction_in[31:25] == 7'b0100000) begin
 
                             // SRAI
-                            alu_op_out     = 6'b001001;
-                            alu_src_b_out  = 1'b1;
-                            reg_write_out  = 1'b1;
+                            alu_op_out    = 6'b001001;
+                            alu_src_b_out = 1'b1;
+                            reg_write_out = 1'b1;
 
                         end
 
@@ -321,9 +343,9 @@ module DECODER(
                     3'b110: begin
 
                         // ORI
-                        alu_op_out     = 6'b000011;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000011;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -331,9 +353,9 @@ module DECODER(
                     3'b111: begin
 
                         // ANDI
-                        alu_op_out     = 6'b000010;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        alu_op_out    = 6'b000010;
+                        alu_src_b_out = 1'b1;
+                        reg_write_out = 1'b1;
 
                     end
 
@@ -349,17 +371,21 @@ module DECODER(
 
             7'b0000011: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b000;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b000;
+                result_mux_out = 2'b01;
+                alu_src_b_out  = 1'b1;
+                alu_op_out     = 6'b000000;
+                reg_write_out  = 1'b1;
+                mem_read_out   = 1'b1;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
                         // LB
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        mem_size_out = 2'b00;
+                        sign_ext_out = 1'b1;
 
                     end
 
@@ -367,9 +393,8 @@ module DECODER(
                     3'b001: begin
 
                         // LH
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        mem_size_out = 2'b01;
+                        sign_ext_out = 1'b1;
 
                     end
 
@@ -377,9 +402,8 @@ module DECODER(
                     3'b010: begin
 
                         // LW
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        mem_size_out = 2'b10;
+                        sign_ext_out = 1'b1;
 
                     end
 
@@ -387,9 +411,8 @@ module DECODER(
                     3'b100: begin
 
                         // LBU
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        mem_size_out = 2'b00;
+                        sign_ext_out = 1'b0;
 
                     end
 
@@ -397,9 +420,8 @@ module DECODER(
                     3'b101: begin
 
                         // LHU
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        reg_write_out  = 1'b1;
+                        mem_size_out = 2'b01;
+                        sign_ext_out = 1'b0;
 
                     end
 
@@ -415,17 +437,18 @@ module DECODER(
 
             7'b0100011: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b001;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b001;
+                alu_src_b_out  = 1'b1;
+                alu_op_out     = 6'b000000;
+                mem_write_out  = 1'b1;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
                         // SB
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        mem_write_out  = 1'b1;
+                        mem_size_out = 2'b00;
 
                     end
 
@@ -433,9 +456,7 @@ module DECODER(
                     3'b001: begin
 
                         // SH
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        mem_write_out  = 1'b1;
+                        mem_size_out = 2'b01;
 
                     end
 
@@ -443,9 +464,7 @@ module DECODER(
                     3'b010: begin
 
                         // SW
-                        alu_op_out     = 6'b000000;
-                        alu_src_b_out  = 1'b1;
-                        mem_write_out  = 1'b1;
+                        mem_size_out = 2'b10;
 
                     end
 
@@ -464,7 +483,7 @@ module DECODER(
                 opcode_out   = instruction_in[6:0];
                 imm_type_out = 3'b010;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
@@ -531,13 +550,10 @@ module DECODER(
 
             7'b0110111: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b011;
-
-                // LUI
-                // Immediate Generator provides U-type immediate
-
-                reg_write_out = 1'b1;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b011;
+                result_mux_out = 2'b10;
+                reg_write_out  = 1'b1;
 
             end
 
@@ -549,16 +565,13 @@ module DECODER(
 
             7'b0010111: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b011;
-
-                // AUIPC
-                // ALU performs PC + U-type immediate
-
-                alu_src_a_out = 1'b1;
-                alu_src_b_out = 1'b1;
-                alu_op_out    = 6'b000000;
-                reg_write_out = 1'b1;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b011;
+                alu_src_a_out  = 1'b1;
+                alu_src_b_out  = 1'b1;
+                alu_op_out     = 6'b000000;
+                result_mux_out = 2'b00;
+                reg_write_out  = 1'b1;
 
             end
 
@@ -570,15 +583,10 @@ module DECODER(
 
             7'b1101111: begin
 
-                opcode_out   = instruction_in[6:0];
-                imm_type_out = 3'b100;
-
-                // JAL
-                // rd = PC + 4
-                // PC = PC + J-type immediate
-                // Immediate Generator handles the J-type immediate
-
-                reg_write_out = 1'b1;
+                opcode_out     = instruction_in[6:0];
+                imm_type_out   = 3'b100;
+                result_mux_out = 2'b11;
+                reg_write_out  = 1'b1;
 
             end
 
@@ -594,16 +602,13 @@ module DECODER(
                 opcode_out   = instruction_in[6:0];
                 imm_type_out = 3'b000;
 
-                case (instruction_in[14:12])
+                case(instruction_in[14:12])
 
                     3'b000: begin
 
                         // JALR
-                        // rd = PC + 4
-                        // PC = (rs1 + immediate) & ~1
-                        // Immediate Generator handles the I-type immediate
-
-                        reg_write_out = 1'b1;
+                        result_mux_out = 2'b11;
+                        reg_write_out  = 1'b1;
 
                     end
 
